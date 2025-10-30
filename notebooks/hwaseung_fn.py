@@ -331,17 +331,17 @@ def create_train_test_dataset(df, target, p_type):
     # X Features 
     if p_type=='FMB': 
         X_col = [
-            'step1_Ram 압력','step2_Ram 압력','step3_Ram 압력',
+            # 'step1_Ram 압력','step2_Ram 압력','step3_Ram 압력',
             'step1_Rotor speed','step2_Rotor speed','step3_Rotor speed',
             'step1_mix온도','step2_mix온도','step3_mix온도',	
             'step1_전력량','step2_전력량','step3_전력량', 
             'step1_time','step2_time','step3_time',
             '필팩터','TA_AVG','TA_MAX','TA_MIN',
-            'Vm_feature','Scorch_feature', # 파생변수 
+            'Vm_feature', # 파생변수 
             ]
     elif p_type=='CMB': 
         X_col = [
-            'step1_Ram 압력','step2_Ram 압력','step3_Ram 압력',
+            # 'step1_Ram 압력','step2_Ram 압력','step3_Ram 압력',
             'step1_Rotor speed','step2_Rotor speed','step3_Rotor speed',
             'step1_mix온도','step2_mix온도','step3_mix온도',	
             'step1_전력량','step2_전력량','step3_전력량', 
@@ -979,7 +979,7 @@ def step_time_modelling(df, step_time):
     return model, feature_importance 
 
 ######################################################################## Shap Tree Feature Importance 추출  ######################################################################## 
-def shap_tree(df, scaler, scaler_features, model, target_col, cluster):  
+def shap_tree(df, scaler, scaler_features, model, p_type, target_col, cluster):  
     '''
     Shap Tree 적용하여 Feature Importance 추출 
         - Cluster와 해당 부분의 Optimal Target(std 5%)에 해당하는 데이터를 원본 데이터에서 필터링하여 -> Feature Importance 추출 
@@ -991,20 +991,10 @@ def shap_tree(df, scaler, scaler_features, model, target_col, cluster):
     ################################# 필요 컬럼 및 데이터셋 추출 #################################
     # Copy 
     dataset = df.reset_index(drop=True).copy() 
-    print(f'Cluster {cluster} | {target_col} => Feature Importance 추출 시작')
-
-    # X Cols 
-    X_cols = [
-            'step1_Ram 압력','step2_Ram 압력','step3_Ram 압력',
-            'step1_Rotor speed','step2_Rotor speed','step3_Rotor speed',
-            'step1_mix온도','step2_mix온도','step3_mix온도',	
-            'step1_전력량','step2_전력량','step3_전력량', 
-            'step1_time','step2_time','step3_time',
-            '필팩터','TA_AVG','TA_MAX','TA_MIN',
-            ]
+    print(f'Cluster {cluster} | {target_col} => Feature Importance 추출 시작')    
 
     # Cluster 
-    cluster_df = dataset['cluster'] 
+    cluster_df = dataset['Cluster'] 
 
     # Target Cols 
     target_prefix = target_col.split('_')[0]
@@ -1023,7 +1013,7 @@ def shap_tree(df, scaler, scaler_features, model, target_col, cluster):
 
     ################################# Cond Data Filtering (Cluster) #################################
     # Cluster 조건 
-    cluster_mask = (dataset['cluster'] == cluster)
+    cluster_mask = (dataset['Cluster'] == cluster)
 
     # Print 
     print(f'Cluster 조건 적용된 데이터 수: {dataset[cluster_mask].shape}') 
@@ -1078,7 +1068,7 @@ def shap_tree(df, scaler, scaler_features, model, target_col, cluster):
     mean_abs_shap = np.mean(np.abs(shap_values), axis=0)
     feature_importance = pd.DataFrame({
                         'Target': target_col, 
-                        "feature": X_cols,
+                        "feature": scaler_features,
                         "mean_abs_shap": mean_abs_shap
                         }).sort_values("mean_abs_shap", ascending=False).reset_index(drop=True)
 
