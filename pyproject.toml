@@ -1,0 +1,34 @@
+[project]
+name = "p2502-hsc"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "hwijongim", email = "177174082+hwijongim@users.noreply.github.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "matplotlib>=3.10.7",
+    "numpy==1.26.4",
+    "optuna>=4.5.0",
+    "pandarallel>=1.6.5",
+    "pandas>=2.3.3",
+    "scikit-learn>=1.7.2",
+    "scipy>=1.16.3",
+    "seaborn>=0.13.2",
+    "shap>=0.49.1",
+    "torch==2.0.1",
+    "tqdm>=4.67.1",
+]
+
+[project.scripts]
+p2502-hsc = "p2502_hsc:main"
+
+[build-system]
+requires = ["uv_build>=0.9.6,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.1.0",
+]
