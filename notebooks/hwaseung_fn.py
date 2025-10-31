@@ -177,7 +177,7 @@ def prep_qa(df):
     '''
     # Copy 
     dataset = df.copy() 
-    target_list = ['Ct 90','Scorch (T5)','Scorch (T3)','Vm (T5)', "Vm (T3)", "M/B 점도 (ML)", "M/B 점도 (MS)",'경도']
+    target_list = ['Ct 90','Scorch (T5)','Scorch (T3)','Vm (T5)', "Vm (T3)", "M/B 데이터 부족점도 (ML)", "M/B 점도 (MS)",'경도']
 
     # 작업지시번호-배치 생성 
     dataset["작업지시번호-배치"] = (dataset["작업지시번호"] + "-" + dataset["B/T"].astype(int).astype(str)) 
@@ -358,7 +358,7 @@ def create_train_test_dataset(df, target, p_type):
     batch = dataset[['작업지시번호-배치']]
     
     # X, y
-    X = dataset[X_col + cluster_col]
+    X = dataset[X_col]
     y = dataset[y_col] 
 
     # Train Test Split 
@@ -896,15 +896,6 @@ def train_tree_sample_weight(train_df, test_df, target_col, cluster_cond, target
     
     return model, feature_importance_df
 
-######################################################################## Feature Importance 시각화 ######################################################################## 
-def plot_feature_importance(model, feature_importance_df): 
-    ''' 
-    Feature Importance 시각화 
-
-    Returns: Plot 
-    ''' 
-    
-
 ######################################################################## Step1 Time 모델링  ######################################################################## 
 def step_time_modelling(df, step_time): 
     ''' 
@@ -993,6 +984,29 @@ def shap_tree(df, scaler, scaler_features, model, p_type, target_col, cluster):
     dataset = df.reset_index(drop=True).copy() 
     print(f'Cluster {cluster} | {target_col} => Feature Importance 추출 시작')    
 
+    # X Features 
+    if p_type=='FMB': 
+        X_col = [
+            # 'step1_Ram 압력','step2_Ram 압력','step3_Ram 압력',
+            'step1_Rotor speed','step2_Rotor speed','step3_Rotor speed',
+            'step1_mix온도','step2_mix온도','step3_mix온도',	
+            'step1_전력량','step2_전력량','step3_전력량', 
+            'step1_time','step2_time','step3_time',
+            '필팩터','TA_AVG','TA_MAX','TA_MIN',
+            'Vm_feature', # 파생변수 
+            ]
+    elif p_type=='CMB': 
+        X_col = [
+            # 'step1_Ram 압력','step2_Ram 압력','step3_Ram 압력',
+            'step1_Rotor speed','step2_Rotor speed','step3_Rotor speed',
+            'step1_mix온도','step2_mix온도','step3_mix온도',	
+            'step1_전력량','step2_전력량','step3_전력량', 
+            'step1_time','step2_time','step3_time',
+            '필팩터','TA_AVG','TA_MAX','TA_MIN',
+            'MB_feature', # 파생변수 
+            ]
+    
+
     # Cluster 
     cluster_df = dataset['Cluster'] 
 
@@ -1004,9 +1018,31 @@ def shap_tree(df, scaler, scaler_features, model, p_type, target_col, cluster):
                         if col.replace(' ', '').startswith(target_prefix) and "기준" in col and col != target_col
                     ][0]
 
+    # Filtering Scaled Cols 
+    derived_cols = []
+    if p_type == 'FMB':
+        derived_cols = ['Vm_feature', 'Scorch_feature', 'Cluster']
+    elif p_type == 'CMB':
+        derived_cols = ['MB_feature', 'Cluster']
+
+    # Scaler Cols 
+    exclude_cols = set(derived_cols)
+
     # Dataset X, y 
-    X_scaled = pd.DataFrame(scaler.transform(dataset[scaler_features]), columns=scaler_features)  
+    X = dataset[X_col]
     y = dataset[[target_col, target_criterion]] 
+
+    # 스케일러 적용 
+    scaler_features = [col for col in X_col if col not in exclude_cols]
+    X_scaled_sub = pd.DataFrame(
+                                scaler.transform(X[scaler_features]),
+                                columns=scaler_features,
+                                index=X.index
+                                )  
+
+    # X 스케일러값 대체 
+    X.loc[:, scaler_features] = X_scaled_sub.values
+    X_scaled= X.copy() 
 
     # Concat data 
     dataset = pd.concat([cluster_df, X_scaled, y], axis=1).dropna().reset_index(drop=True).copy() 
@@ -1028,18 +1064,24 @@ def shap_tree(df, scaler, scaler_features, model, p_type, target_col, cluster):
                                 )
 
     # Otpimal Target 조건 
-    std = 0.03
-    center = dataset[target_criterion] 
-        # Upper Lower 
-    lower = center * (1-std) 
-    upper = center * (1+std) 
-    
-    # 범위 확인 
-    optimal_target_mask = (dataset[target_col] >= lower) & (dataset[target_col] <= upper) 
-    optimal_target_data = dataset[optimal_target_mask] 
+    stds = [0.01, 0.03, 0.05]
+    for std in stds: 
+        center = dataset[target_criterion] 
+            # Upper Lower 
+        lower = center * (1-std) 
+        upper = center * (1+std) 
+        
+        # 범위 확인 
+        optimal_target_mask = (dataset[target_col] >= lower) & (dataset[target_col] <= upper) 
+        optimal_target_data = dataset[optimal_target_mask] 
 
-    # Print 
-    print(f'Optimal Target 조건 적용된 데이터 수: {optimal_target_data.shape}') 
+        count = optimal_target_data.shape[0] 
+        if 1000 <= count <= 3000: 
+            print(f"✅ 적절한 데이터 수 확보 ({count}개, std={std:.2%})")
+            break
+
+        # Print 
+        print(f'Optimal Target 조건 적용된 데이터 수: {optimal_target_data.shape}') 
 
     ################################# Combine Filters ################################# 
     # Combine Filters 
@@ -1050,8 +1092,7 @@ def shap_tree(df, scaler, scaler_features, model, p_type, target_col, cluster):
     print(f'모든 조건이 필터링된 데이터 수: {filtered_dataset.shape}')
 
     # Drop 
-    cols_to_drop = ['cluster', target_col, target_criterion]
-    filtered_dataset = filtered_dataset.drop(columns=cols_to_drop, errors='ignore')
+    filtered_dataset = filtered_dataset[X_scaled.columns]
 
     ################################# Apply Tree Shap ################################# 
     # Tree Explainer 
@@ -1068,7 +1109,7 @@ def shap_tree(df, scaler, scaler_features, model, p_type, target_col, cluster):
     mean_abs_shap = np.mean(np.abs(shap_values), axis=0)
     feature_importance = pd.DataFrame({
                         'Target': target_col, 
-                        "feature": scaler_features,
+                        "feature": X_scaled.columns,
                         "mean_abs_shap": mean_abs_shap
                         }).sort_values("mean_abs_shap", ascending=False).reset_index(drop=True)
 
@@ -1131,13 +1172,12 @@ def voting_feature_importance(feature_importances):
     # 사용자가 정의한 스키마로 맞추고, Voting으로 정렬하되 출력 컬럼은 틀 유지
     out = (agg
            .sort_values('Voting', ascending=False)
-           .head(7)
            .rename(columns={
                'feature': 'Features',
                '등장빈도': '등장 빈도',
-               '평균중요도': '평균 중요도',
+               'Voting': 'Voting',
                '관련타겟': '관련 타겟'
-           })[['Features', '등장 빈도', '평균 중요도', '관련 타겟']]
+           })[['Features', '등장 빈도', 'Voting', '관련 타겟']]
            .reset_index(drop=True))
 
     return out
