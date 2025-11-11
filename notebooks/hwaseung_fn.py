@@ -1843,3 +1843,5 @@ def train_linear(train_df, test_df, target_col):
         print("ElasticNet에 충족한 Features 없음. P-value로 대체")
 
     return model, enet_selected_features 
+
+######################################################################## Clustering - 1차 Vm ######################################################################## 
